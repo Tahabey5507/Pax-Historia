@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Pax Historia SVG Harita Demo</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+
+    #mapContainer {
+      width: 100%;
+      height: 100%;
+      border: none;
+      overflow: hidden;
+      position: relative;
+    }
+
+    object {
+      width: 100%;
+      height: 100%;
+    }
+
+    #infoBox {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(255,255,255,0.9);
+      border: 1px solid #333;
+      padding: 10px;
+      min-height: 50px;
+      max-width: 300px;
+      font-family: sans-serif;
+      z-index: 10; /* kutuyu haritanın üstüne çıkarır */
+    }
+  </style>
+</head>
+<body>
+  <div id="mapContainer">
+    <object id="svgMap" type="image/svg+xml" data="world_map.svg"></object>
+    <div id="infoBox">Ülke bilgisi burada görünecek</div>
+  </div>
+
+  <script>
+    document.getElementById("svgMap").addEventListener("load", function() {
+      let svgDoc = this.contentDocument;
+      let svgEl = svgDoc.documentElement;
+      let viewBox = svgEl.viewBox.baseVal;
+
+      let isDragging = false;
+      let startX, startY;
+      let lastTouchDist = null;
+
+      const maxViewBoxWidth = viewBox.width;
+      const maxViewBoxHeight = viewBox.height;
+
+      // Ülke bilgileri sözlüğü (ID’ler büyük harfle)
+      const countryInfo = {
+        Turkey: "Türkiye: Başkent Ankara, Nüfus ~85 milyon.",
+        Greece: "Yunanistan: Başkent Atina, Nüfus ~10 milyon.",
+        Bulgaria: "Bulgaristan: Başkent Sofya, Nüfus ~7 milyon.",
+        Iran: "İran: Başkent Tahran, Nüfus ~85 milyon."
+      };
+
+      // Ülke path’lerine tıklama/dokunma olayı ekle
+      Object.keys(countryInfo).forEach(id => {
+        let el = svgDoc.getElementById(id);
+        if (el) {
+          el.addEventListener("click", function() {
+            document.getElementById("infoBox").innerText = countryInfo[id];
+          });
+          el.addEventListener("touchstart", function() {
+            document.getElementById("infoBox").innerText = countryInfo[id];
+          });
+        }
+      });
+
+      // Dokunmatik Pan
+      svgEl.addEventListener("touchstart", function(e) {
+        if (e.touches.length === 1) {
+          isDragging = true;
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+        } else if (e.touches.length === 2) {
+          lastTouchDist = getTouchDist(e.touches);
+        }
+      });
+
+      svgEl.addEventListener("touchmove", function(e) {
+        e.preventDefault();
+        if (e.touches.length === 1 && isDragging) {
+          let dx = (startX - e.touches[0].clientX) * (viewBox.width / svgEl.clientWidth);
+          let dy = (startY - e.touches[0].clientY) * (viewBox.height / svgEl.clientHeight);
+          viewBox.x += dx;
+          viewBox.y += dy;
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+        } else if (e.touches.length === 2) {
+          let dist = getTouchDist(e.touches);
+          let rect = svgEl.getBoundingClientRect();
+          let centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+          let centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+
+          if (lastTouchDist) {
+            let zoomFactor = dist / lastTouchDist;
+            let svgX = viewBox.x + centerX * (viewBox.width / svgEl.clientWidth);
+            let svgY = viewBox.y + centerY * (viewBox.height / svgEl.clientHeight);
+
+            let newWidth = viewBox.width / zoomFactor;
+            let newHeight = viewBox.height / zoomFactor;
+
+            if (newWidth <= maxViewBoxWidth && newHeight <= maxViewBoxHeight) {
+              viewBox.width = newWidth;
+              viewBox.height = newHeight;
+              viewBox.x = svgX - centerX * (viewBox.width / svgEl.clientWidth);
+              viewBox.y = svgY - centerY * (viewBox.height / svgEl.clientHeight);
+            }
+          }
+          lastTouchDist = dist;
+        }
+      });
+
+      svgEl.addEventListener("touchend", function() {
+        isDragging = false;
+        lastTouchDist = null;
+      });
+
+      function getTouchDist(touches) {
+        let dx = touches[0].clientX - touches[1].clientX;
+        let dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx*dx + dy*dy);
+      }
+
+      // Fare Zoom
+      svgEl.addEventListener("wheel", function(e) {
+        e.preventDefault();
+        let rect = svgEl.getBoundingClientRect();
+        let mouseX = e.clientX - rect.left;
+        let mouseY = e.clientY - rect.top;
+
+        let zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+        let svgX = viewBox.x + mouseX * (viewBox.width / svgEl.clientWidth);
+        let svgY = viewBox.y + mouseY * (viewBox.height / svgEl.clientHeight);
+
+        let newWidth = viewBox.width / zoomFactor;
+        let newHeight = viewBox.height / zoomFactor;
+
+        if (newWidth <= maxViewBoxWidth && newHeight <= maxViewBoxHeight) {
+          viewBox.width = newWidth;
+          viewBox.height = newHeight;
+          viewBox.x = svgX - mouseX * (viewBox.width / svgEl.clientWidth);
+          viewBox.y = svgY - mouseY * (viewBox.height / svgEl.clientHeight);
+        }
+      });
+
+      // Fare Pan
+      let isMouseDragging = false;
+      let mouseStartX, mouseStartY;
+
+      svgEl.addEventListener("mousedown", function(e) {
+        if (e.button === 0) {
+          isMouseDragging = true;
+          mouseStartX = e.clientX;
+          mouseStartY = e.clientY;
+        }
+      });
+
+      svgEl.addEventListener("mousemove", function(e) {
+        if (isMouseDragging) {
+          let dx = (mouseStartX - e.clientX) * (viewBox.width / svgEl.clientWidth);
+          let dy = (mouseStartY - e.clientY) * (viewBox.height / svgEl.clientHeight);
+          viewBox.x += dx;
+          viewBox.y += dy;
+          mouseStartX = e.clientX;
+          mouseStartY = e.clientY;
+        }
+      });
+
+      svgEl.addEventListener("mouseup", function(e) {
+        if (e.button === 0) {
+          isMouseDragging = false;
+        }
+      });
+
+      svgEl.addEventListener("mouseleave", function() {
+        isMouseDragging = false;
+      });
+    });
+  </script>
+</body>
+</html>
