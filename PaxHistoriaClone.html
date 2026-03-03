@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Pax Historia SVG Harita Demo</title>
+  <style>
+    #mapContainer {
+      width: 100%;
+      height: 600px;
+      border: 1px solid black;
+      overflow: hidden;
+    }
+    object {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <h1>Pax Historia SVG Harita Demo</h1>
+  <input id="playerInput" placeholder="Hamleni yaz...">
+  <button onclick="playTurn()">Gönder</button>
+  <p id="response"></p>
+
+  <div id="mapContainer">
+    <object id="svgMap" type="image/svg+xml" data="world_map.svg"></object>
+  </div>
+
+  <script>
+    // Basit AI
+    function playTurn() {
+      let move = document.getElementById("playerInput").value;
+      let response = "AI cevabı: " + simpleAI(move);
+      document.getElementById("response").innerText = response;
+    }
+
+    function simpleAI(move) {
+      move = move.toLowerCase();
+      if (move.includes("saldır")) {
+        return "Ordularını savunmaya çekiyorum!";
+      } else if (move.includes("barış")) {
+        return "Barış anlaşmasını kabul ediyorum.";
+      } else {
+        return "Hamleni anlamadım, daha açık yaz.";
+      }
+    }
+
+    document.getElementById("svgMap").addEventListener("load", function() {
+      let svgDoc = this.contentDocument;
+      let svgEl = svgDoc.documentElement;
+      let viewBox = svgEl.viewBox.baseVal;
+
+      let isDragging = false;
+      let startX, startY;
+      let lastTouchDist = null;
+
+      // Minimum zoom sınırı: orijinal boyut
+      const maxViewBoxWidth = viewBox.width;
+      const maxViewBoxHeight = viewBox.height;
+
+      // Pan (tek parmak sürükleme)
+      svgEl.addEventListener("touchstart", function(e) {
+        if (e.touches.length === 1) {
+          isDragging = true;
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+        } else if (e.touches.length === 2) {
+          lastTouchDist = getTouchDist(e.touches);
+        }
+      });
+
+      svgEl.addEventListener("touchmove", function(e) {
+        e.preventDefault();
+        if (e.touches.length === 1 && isDragging) {
+          let dx = (startX - e.touches[0].clientX) * (viewBox.width / svgEl.clientWidth);
+          let dy = (startY - e.touches[0].clientY) * (viewBox.height / svgEl.clientHeight);
+          viewBox.x += dx;
+          viewBox.y += dy;
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+        } else if (e.touches.length === 2) {
+          let dist = getTouchDist(e.touches);
+          let rect = svgEl.getBoundingClientRect();
+          let centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+          let centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+
+          if (lastTouchDist) {
+            let zoomFactor = dist / lastTouchDist;
+
+            let svgX = viewBox.x + centerX * (viewBox.width / svgEl.clientWidth);
+            let svgY = viewBox.y + centerY * (viewBox.height / svgEl.clientHeight);
+
+            let newWidth = viewBox.width / zoomFactor;
+            let newHeight = viewBox.height / zoomFactor;
+
+            // Minimum zoom kontrolü
+            if (newWidth <= maxViewBoxWidth && newHeight <= maxViewBoxHeight) {
+              viewBox.width = newWidth;
+              viewBox.height = newHeight;
+              viewBox.x = svgX - centerX * (viewBox.width / svgEl.clientWidth);
+              viewBox.y = svgY - centerY * (viewBox.height / svgEl.clientHeight);
+            }
+          }
+          lastTouchDist = dist;
+        }
+      });
+
+      svgEl.addEventListener("touchend", function() {
+        isDragging = false;
+        lastTouchDist = null;
+      });
+
+      function getTouchDist(touches) {
+        let dx = touches[0].clientX - touches[1].clientX;
+        let dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx*dx + dy*dy);
+      }
+
+      // Fare ile zoom
+      svgEl.addEventListener("wheel", function(e) {
+        e.preventDefault();
+        let rect = svgEl.getBoundingClientRect();
+        let mouseX = e.clientX - rect.left;
+        let mouseY = e.clientY - rect.top;
+
+        let zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+
+        let svgX = viewBox.x + mouseX * (viewBox.width / svgEl.clientWidth);
+        let svgY = viewBox.y + mouseY * (viewBox.height / svgEl.clientHeight);
+
+        let newWidth = viewBox.width / zoomFactor;
+        let newHeight = viewBox.height / zoomFactor;
+
+        // Minimum zoom kontrolü
+        if (newWidth <= maxViewBoxWidth && newHeight <= maxViewBoxHeight) {
+          viewBox.width = newWidth;
+          viewBox.height = newHeight;
+          viewBox.x = svgX - mouseX * (viewBox.width / svgEl.clientWidth);
+          viewBox.y = svgY - mouseY * (viewBox.height / svgEl.clientHeight);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
